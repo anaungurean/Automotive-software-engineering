@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
 
+
 def exercise_2(frame):
     height, width, _ = frame.shape
 
     rows = 3  # Number of rows
-    cols = 4  # Number of columns
+    cols = 4 # Number of columns
     new_width = width // cols
     new_height = height // rows
     resized_frame = cv2.resize(frame, (new_width, new_height))
@@ -18,9 +19,9 @@ def exercise_3(frame):
     return gray_frame
 
 def exercise_4(frame):
-    upper_left_rel = (0.48, 0.75)
-    upper_right_rel = (0.53, 0.75)
-    lower_left_rel = (0, 1)
+    upper_left_rel = (0.44, 0.77)
+    upper_right_rel = (0.57, 0.77)
+    lower_left_rel = (0.03, 1)
     lower_right_rel = (1, 1)
     new_width = frame.shape[1]
     new_height = frame.shape[0]
@@ -45,13 +46,13 @@ def exercise_4(frame):
     # Display the frames
     cv2.imshow("Trapezoid Frame", trapezoid_frame * 255)  # Multiply by 255 to visualize
     cv2.imshow("Road Only", road_only_frame)
+
     return [upper_left, upper_right, lower_right, lower_left]
 
 def exercise_5(frame, trapezoid_bounds):
     # Define corners of the screen (entire frame
 
     screen_bounds = np.float32([[0, 0], [frame.shape[1], 0], [frame.shape[1], frame.shape[0]], [0, frame.shape[0]]])
-
 
     # Convert corners to float32
     trapezoid_bounds = np.float32(trapezoid_bounds)
@@ -74,6 +75,120 @@ def exercise_6(frame):
     cv2.imshow("Blur", blurred_frame)
     return blurred_frame
 
+def exercise_7(frame):
+    sobel_vertical = np.float32([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+    sobel_horizontal = np.transpose(sobel_vertical)
+    frame_as_float = np.float32(frame)
+    gradient_x = cv2.filter2D(frame_as_float, -1, sobel_horizontal)
+    gradient_y = cv2.filter2D(frame_as_float, -1, sobel_vertical)
+    gradient_magnitude = np.sqrt(gradient_x ** 2 + gradient_y ** 2)
+    gradient_magnitude = cv2.convertScaleAbs(gradient_magnitude, gradient_magnitude)
+    cv2.imshow("Sobel", gradient_magnitude)
+    return gradient_magnitude
+
+def exercise_8(frame):
+    threshold_value =  int(255/2 - 30)
+    _, thresholded_frame = cv2.threshold(frame, threshold_value, 255, cv2.THRESH_BINARY)
+    cv2.imshow("Binarized", thresholded_frame)
+    return thresholded_frame
+
+
+def exercise_9(frame):
+    clean_frame = frame.copy()
+    height, width = frame.shape
+    black_columns = int(width * 0.05)
+    clean_frame[:, :black_columns] = 0
+    clean_frame[:, -black_columns:] = 0
+
+    left_half = clean_frame[:, :width // 2]
+    right_half = clean_frame[:, width // 2:]
+
+    white_pixels_left = np.argwhere(left_half > 0)
+    left_xs = white_pixels_left[:, 1]
+    left_ys = white_pixels_left[:, 0]
+
+    white_pixels_right = np.argwhere(right_half > 0)
+    right_xs = white_pixels_right[:, 1] + width // 2
+    right_ys = white_pixels_right[:, 0]
+
+    return left_xs, left_ys, right_xs, right_ys
+
+
+def exercise_10(trapezoid_bounds, resized_frame, frame, left_xs, left_ys, right_xs, right_ys, last_valid_left_top, last_valid_left_bottom, last_valid_right_top, last_valid_right_bottom):
+    # Fit a linear regression line to the left lane markings
+    left_coefficients = np.polynomial.polynomial.polyfit(left_xs, left_ys, 1)
+    left_b, left_a = left_coefficients[0], left_coefficients[1]
+
+    # Fit a linear regression line to the right lane markings
+    right_coefficients = np.polynomial.polynomial.polyfit(right_xs, right_ys, 1)
+    right_b, right_a = right_coefficients[0], right_coefficients[1]
+
+    # Get image dimensions
+    height, width = frame.shape[:2]
+
+    bottom_y = 0
+    top_y = height
+
+    # Calculate corresponding x coordinates for left line
+    left_bottom_x = int((bottom_y - left_b) / left_a)
+    left_top_x = int((top_y - left_b) / left_a)
+
+    # Calculate corresponding x coordinates for right line
+    right_bottom_x = int((bottom_y - right_b) / right_a)
+    right_top_x = int((top_y - right_b) / right_a)
+
+    if not left_bottom_x in range(-10**8, 10**8):
+        left_bottom_x = last_valid_left_bottom[0]
+
+    if not left_top_x in range(-10**8, 10**8):
+        left_top_x = last_valid_left_top[0]
+
+    if not right_bottom_x in range(-10**8, 10**8):
+        right_bottom_x = last_valid_right_bottom[0]
+
+    if not right_top_x in range(-10**8, 10**8):
+        right_top_x = last_valid_right_top[0]
+
+    last_valid_left_top = (left_top_x, top_y)
+    last_valid_left_bottom = (left_bottom_x, bottom_y)
+    last_valid_right_top = (right_top_x, top_y)
+    last_valid_right_bottom = (right_bottom_x, bottom_y)
+
+    left_top = int(left_top_x), int(top_y)
+    left_bottom = int(left_bottom_x), int(bottom_y)
+    right_top = int(right_top_x), int(top_y)
+    right_bottom = int(right_bottom_x), int(bottom_y)
+
+    # Draw the lines
+    cv2.line(frame, left_top, left_bottom, (200, 0, 0), 5)
+    cv2.line(frame, right_top, right_bottom, (100, 0, 0), 5)
+    cv2.imshow("Lines", frame)
+
+    left_final_frame = np.zeros(resized_frame.shape, dtype=np.uint8)
+    cv2.line(left_final_frame, left_top, left_bottom, (255, 0, 0), 3)
+    screen_bounds = np.float32([[0, 0], [frame.shape[1], 0], [frame.shape[1], frame.shape[0]], [0, frame.shape[0]]])
+    trapezoid_bounds = np.float32(trapezoid_bounds)
+    transform_matrix_top_down = cv2.getPerspectiveTransform(screen_bounds,  trapezoid_bounds)
+    stretched_final_frame_left = cv2.warpPerspective(left_final_frame, transform_matrix_top_down, (frame.shape[1], frame.shape[0]))
+
+    white_pixels = np.argwhere(stretched_final_frame_left > 0)
+    left_white_xs = white_pixels[:, 1]
+    left_white_ys = white_pixels[:, 0]
+
+    right_final_frame = np.zeros(resized_frame.shape, dtype=np.uint8)
+    cv2.line(right_final_frame, right_top, right_bottom, (255, 0, 0), 3)
+    stretched_final_frame_right = cv2.warpPerspective(right_final_frame, transform_matrix_top_down, (frame.shape[1], frame.shape[0]))
+
+    white_pixels = np.argwhere(stretched_final_frame_right > 0)
+    right_white_xs = white_pixels[:, 1]
+    right_white_ys = white_pixels[:, 0]
+
+    colored_frame = resized_frame.copy()
+    colored_frame[left_white_ys, left_white_xs] = (50,50,250)
+    colored_frame[right_white_ys, right_white_xs] = (50, 250, 50)
+    cv2.imshow("Final", colored_frame)
+
+
 def main():
     cam = cv2.VideoCapture('Lane_Detection_Test_Video_01.mp4')
 
@@ -82,7 +197,10 @@ def main():
     if not ret:
         print("Error: Cannot read video file.")
         return
-
+    last_valid_left_top = (0, 0)
+    last_valid_left_bottom = (0, 0)
+    last_valid_right_top = (0, 0)
+    last_valid_right_bottom = (0, 0)
 
     while True:
         ret, frame = cam.read()
@@ -94,8 +212,12 @@ def main():
         gray_frame = exercise_3(resized_frame)
         trapezoid_bounds = exercise_4(gray_frame)
         stretched_street_frame = exercise_5(gray_frame, trapezoid_bounds)
-        exercise_6(stretched_street_frame)
+        blurred_frame = exercise_6(stretched_street_frame)
+        gradient_magnitude = exercise_7(blurred_frame)
+        thresholded_frame = exercise_8(gradient_magnitude)
+        left_xs, left_ys, right_xs, right_ys = exercise_9(thresholded_frame)
 
+        exercise_10(trapezoid_bounds, resized_frame,thresholded_frame, left_xs, left_ys, right_xs, right_ys, last_valid_left_top, last_valid_left_bottom, last_valid_right_top, last_valid_right_bottom)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
