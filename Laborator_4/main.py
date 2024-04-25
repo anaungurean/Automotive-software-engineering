@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 
 
+
 def exercise_2(frame):
     height, width, _ = frame.shape
     rows = 3
